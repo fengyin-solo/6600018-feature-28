@@ -8,6 +8,7 @@ export const useOcrStore = defineStore('ocr', () => {
   const isLoading = ref(false)
   const searchQuery = ref('')
   const searchResults = ref<OCRResult[]>([])
+  const recentlyDeleted = ref<Annotation | null>(null)
 
   // Mock data
   const MOCK_DOC: Document = {
@@ -75,7 +76,21 @@ export const useOcrStore = defineStore('ocr', () => {
 
   function removeAnnotation(id: string) {
     if (!currentDoc.value) return
+    const found = currentDoc.value.annotations.find(a => a.id === id)
+    if (found) {
+      recentlyDeleted.value = { ...found }
+    }
     currentDoc.value.annotations = currentDoc.value.annotations.filter(a => a.id !== id)
+  }
+
+  function undoRemoveAnnotation() {
+    if (!currentDoc.value || !recentlyDeleted.value) return
+    currentDoc.value.annotations.push(recentlyDeleted.value)
+    recentlyDeleted.value = null
+  }
+
+  function clearRecentlyDeleted() {
+    recentlyDeleted.value = null
   }
 
   function convertVariant(text: string): string {
@@ -103,8 +118,8 @@ export const useOcrStore = defineStore('ocr', () => {
   }
 
   return {
-    documents, currentDoc, isLoading, searchQuery, searchResults,
-    loadMockDocument, uploadAndOCR, addAnnotation, removeAnnotation,
+    documents, currentDoc, isLoading, searchQuery, searchResults, recentlyDeleted,
+    loadMockDocument, uploadAndOCR, addAnnotation, removeAnnotation, undoRemoveAnnotation, clearRecentlyDeleted,
     convertVariant, searchInDocuments, exportTEI
   }
 })

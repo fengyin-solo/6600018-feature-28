@@ -74,23 +74,66 @@
       <h3 class="text-amber-300 font-bold text-sm mt-4">标注列表</h3>
       <div v-if="store.currentDoc" class="space-y-1">
         <div v-for="a in store.currentDoc.annotations" :key="a.id"
-          class="bg-gray-800 rounded p-2 text-xs flex justify-between">
+          class="bg-gray-800 rounded p-2 text-xs flex justify-between items-center">
           <span>[{{ a.type }}] {{ a.label }}: {{ a.content }}</span>
-          <button @click="store.removeAnnotation(a.id)" class="text-red-400 hover:underline">删除</button>
+          <button
+            v-if="pendingDeleteId !== a.id"
+            @click="pendingDeleteId = a.id"
+            class="text-red-400 hover:underline ml-2 shrink-0"
+          >删除</button>
+          <span v-else class="flex items-center gap-1 ml-2 shrink-0">
+            <button @click="confirmDelete(a.id)" class="text-red-400 hover:underline">确认</button>
+            <button @click="pendingDeleteId = ''" class="text-gray-400 hover:underline">取消</button>
+          </span>
         </div>
         <div v-if="!store.currentDoc.annotations.length" class="text-gray-600 text-xs">
           在图片上拖拽框选区域添加标注
         </div>
       </div>
     </div>
+
+    <Transition name="snackbar">
+      <div v-if="showUndoToast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 flex items-center gap-3 shadow-lg z-50">
+        <span class="text-sm text-gray-300">已删除标注「{{ store.recentlyDeleted?.label }}」</span>
+        <button @click="handleUndo" class="text-amber-400 text-sm font-medium hover:underline">撤销</button>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useOcrStore } from './store/ocr'
 import ImageCanvas from './components/ImageCanvas.vue'
 
 const store = useOcrStore()
+const pendingDeleteId = ref('')
+const showUndoToast = ref(false)
+let undoTimer: ReturnType<typeof setTimeout> | null = null
+
+function confirmDelete(id: string) {
+  store.removeAnnotation(id)
+  pendingDeleteId.value = ''
+  showUndoToast.value = true
+  if (undoTimer) clearTimeout(undoTimer)
+  undoTimer = setTimeout(() => {
+    showUndoToast.value = false
+    store.clearRecentlyDeleted()
+  }, 5000)
+}
+
+function handleUndo() {
+  store.undoRemoveAnnotation()
+  showUndoToast.value = false
+  if (undoTimer) clearTimeout(undoTimer)
+}
+
+watch(() => store.currentDoc, () => {
+  pendingDeleteId.value = ''
+  showUndoToast.value = false
+  if (undoTimer) clearTimeout(undoTimer)
+})
 
 function onUpload(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
@@ -109,3 +152,20 @@ function doExport() {
   URL.revokeObjectURL(url)
 }
 </script>
+
+<style scoped>
+.snackbar-enter-active,
+.snackbar-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.snackbar-enter-from,
+.snackbar-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 12px);
+}
+.snackbar-enter-to,
+.snackbar-leave-from {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+</style>
